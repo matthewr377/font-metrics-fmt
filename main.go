@@ -5,6 +5,8 @@
 package main
 
 import (
+	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -19,42 +21,84 @@ func main() {
 	}
 }
 
+// namedFields ties a set of parsed fields back to the input it came
+// from, so multi-file output (text headers, or the "file" key in JSON)
+// can tell them apart.
+type namedFields struct {
+	Label  string          `json:"file"`
+	Fields []metrics.Field `json:"fields"`
+}
+
 func run(args []string, stdin io.Reader, stdout io.Writer) error {
-	if len(args) == 0 {
-		return formatOne("(stdin)", stdin, stdout, false)
+	fs := flag.NewFlagSet("fontfmt", flag.ContinueOnError)
+	jsonOut := fs.Bool("json", false, "print fields as JSON instead of aligned text")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	paths := fs.Args()
+
+	var results []namedFields
+	if len(paths) == 0 {
+		fields, err := readFields("(stdin)", stdin)
+		if err != nil {
+			return err
+		}
+		results = append(results, namedFields{Label: "(stdin)", Fields: fields})
+	} else {
+		for _, path := range paths {
+			f, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			fields, err := readFields(path, f)
+			f.Close()
+			if err != nil {
+				return err
+			}
+			results = append(results, namedFields{Label: path, Fields: fields})
+		}
 	}
 
-	for i, path := range args {
-		f, err := os.Open(path)
-		if err != nil {
-			return err
+	if *jsonOut {
+		return writeJSON(results, stdout)
+	}
+	return writeText(results, stdout)
+}
+
+func readFields(label string, r io.Reader) ([]metrics.Field, error) {
+	raw, err := io.ReadAll(r)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", label, err)
+	}
+
+	fields, err := metrics.Parse(string(raw))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", label, err)
+	}
+	return fields, nil
+}
+
+func writeText(results []namedFields, w io.Writer) error {
+	for i, r := range results {
+		if len(results) > 1 {
+			fmt.Fprintf(w, "== %s ==\n", r.Label)
 		}
-		err = formatOne(path, f, stdout, len(args) > 1)
-		f.Close()
-		if err != nil {
-			return err
-		}
-		if len(args) > 1 && i < len(args)-1 {
-			fmt.Fprintln(stdout)
+		fmt.Fprint(w, metrics.Format(r.Fields))
+		if len(results) > 1 && i < len(results)-1 {
+			fmt.Fprintln(w)
 		}
 	}
 	return nil
 }
 
-func formatOne(label string, r io.Reader, w io.Writer, withHeader bool) error {
-	raw, err := io.ReadAll(r)
-	if err != nil {
-		return fmt.Errorf("%s: %w", label, err)
+// writeJSON emits a single field array for one input, or an array of
+// {file, fields} objects when there's more than one, so the shape of
+// the output doesn't carry a pointless wrapper in the common case.
+func writeJSON(results []namedFields, w io.Writer) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	if len(results) == 1 {
+		return enc.Encode(results[0].Fields)
 	}
-
-	fields, err := metrics.Parse(string(raw))
-	if err != nil {
-		return fmt.Errorf("%s: %w", label, err)
-	}
-
-	if withHeader {
-		fmt.Fprintf(w, "== %s ==\n", label)
-	}
-	fmt.Fprint(w, metrics.Format(fields))
-	return nil
+	return enc.Encode(results)
 }

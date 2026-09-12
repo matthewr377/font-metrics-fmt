@@ -61,8 +61,8 @@ var numericUnit = regexp.MustCompile(`^(-?[0-9]+(?:\.[0-9]+)?)\s*(px|pt|u|units?
 
 // Field is one normalized metric entry.
 type Field struct {
-	Key   string // canonical, e.g. "cap-height"
-	Value string // cleaned value, unit suffix removed
+	Key   string `json:"key"`   // canonical, e.g. "cap-height"
+	Value string `json:"value"` // cleaned value, unit suffix removed
 }
 
 // Parse reads messy "key <sep> value" lines and returns them normalized.

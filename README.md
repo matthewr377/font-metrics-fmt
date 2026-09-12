@@ -38,7 +38,7 @@ x-height:      519
 ## Usage
 
 ```
-fontfmt [file ...]
+fontfmt [-json] [file ...]
 ```
 
 With no arguments, it reads from stdin:
@@ -49,6 +49,24 @@ $ cat arial.metrics | fontfmt
 
 With more than one file, each block is printed under a `== path ==`
 header so you can tell them apart.
+
+Pass `-json` to get the same fields as JSON instead of aligned text.
+For a single input that's a flat array of `{"key", "value"}` objects,
+in the same canonical order as the text output:
+
+```
+$ fontfmt -json arial.metrics
+[
+  {
+    "key": "font-family",
+    "value": "Arial"
+  },
+  ...
+]
+```
+
+With more than one file, the output is an array of `{"file",
+"fields"}` objects instead, one per input, so files stay distinguishable.
 
 Lines starting with `#` are treated as comments and skipped. A line
 that can't be split into a key and a value, or a field that's given
