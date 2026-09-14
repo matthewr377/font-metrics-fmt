@@ -39,6 +39,7 @@ var fieldRank = func() map[string]int {
 var aliases = map[string]string{
 	"fontfamily":         "font-family",
 	"family":             "font-family",
+	"familyname":         "font-family",
 	"name":               "font-family",
 	"unitsperem":         "units-per-em",
 	"upm":                "units-per-em",
@@ -51,6 +52,23 @@ var aliases = map[string]string{
 	"xheight":            "x-height",
 	"underlineposition":  "underline-position",
 	"underlinethickness": "underline-thickness",
+}
+
+// afmSkipSections lists AFM block names (lowercased, from "StartX" /
+// "EndX" marker lines) whose contents are per-glyph or per-pair data
+// rather than font-level metrics, so they're skipped wholesale instead
+// of being parsed as key/value fields. Without this, an AFM file's
+// CharMetrics block - one "C ... ; WX ... ; N ... ;" line per glyph,
+// all starting with the same "C" token - would trip the duplicate
+// field check on the second glyph.
+var afmSkipSections = map[string]bool{
+	"charmetrics": true,
+	"kerndata":    true,
+	"kernpairs":   true,
+	"kernpairs0":  true,
+	"kernpairs1":  true,
+	"trackkern":   true,
+	"composites":  true,
 }
 
 // numericUnit strips a trailing unit suffix from a value like "800px" or
@@ -73,15 +91,29 @@ func Parse(input string) ([]Field, error) {
 	var fields []Field
 	seen := make(map[string]bool)
 
-	for i, raw := range strings.Split(input, "\n") {
-		line := strings.TrimSpace(raw)
+	lines := strings.Split(input, "\n")
+	for i := 0; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
 		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		lowerFirst := strings.ToLower(firstToken(line))
+		switch lowerFirst {
+		case "comment", "startfontmetrics", "endfontmetrics":
+			continue
+		}
+
+		if section, ok := strings.CutPrefix(lowerFirst, "start"); ok && afmSkipSections[section] {
+			end := "end" + section
+			for i++; i < len(lines) && strings.ToLower(firstToken(lines[i])) != end; i++ {
+			}
 			continue
 		}
 
 		key, value, ok := splitKeyValue(line)
 		if !ok {
-			return nil, fmt.Errorf("line %d: can't find a key/value split in %q", i+1, raw)
+			return nil, fmt.Errorf("line %d: can't find a key/value split in %q", i+1, lines[i])
 		}
 
 		canonical := normalizeKey(key)
@@ -125,6 +157,16 @@ func splitKeyValue(line string) (key, value string, ok bool) {
 		return strings.TrimSpace(line[:idx]), strings.TrimSpace(line[idx+1:]), true
 	}
 	return "", "", false
+}
+
+// firstToken returns the first whitespace-separated token in s, or ""
+// if s is blank.
+func firstToken(s string) string {
+	fields := strings.Fields(s)
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
 }
 
 func normalizeKey(raw string) string {

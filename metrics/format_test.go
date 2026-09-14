@@ -45,3 +45,58 @@ func TestParseRejectsUnsplittableLine(t *testing.T) {
 		t.Fatal("expected an error for a line with no key/value split, got nil")
 	}
 }
+
+func TestParseHandlesRealAFMFile(t *testing.T) {
+	input := "StartFontMetrics 4.1\n" +
+		"Comment Generated for testing\n" +
+		"FamilyName Helvetica\n" +
+		"Ascender 718\n" +
+		"Descender -207\n" +
+		"CapHeight 718\n" +
+		"XHeight 523\n" +
+		"UnderlinePosition -100\n" +
+		"UnderlineThickness 50\n" +
+		"StartCharMetrics 3\n" +
+		"C 32 ; WX 278 ; N space ; B 0 0 0 0 ;\n" +
+		"C 33 ; WX 278 ; N exclam ; B 90 0 187 718 ;\n" +
+		"C 34 ; WX 355 ; N quotedbl ; B 70 463 285 718 ;\n" +
+		"EndCharMetrics\n" +
+		"StartKernData\n" +
+		"StartKernPairs 1\n" +
+		"KPX A V -70\n" +
+		"EndKernPairs\n" +
+		"EndKernData\n" +
+		"EndFontMetrics\n"
+
+	fields, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+
+	want := map[string]string{
+		"font-family":         "Helvetica",
+		"ascent":              "718",
+		"descent":             "-207",
+		"cap-height":          "718",
+		"x-height":            "523",
+		"underline-position":  "-100",
+		"underline-thickness": "50",
+	}
+
+	got := make(map[string]string, len(fields))
+	for _, f := range fields {
+		got[f.Key] = f.Value
+	}
+
+	for key, val := range want {
+		if got[key] != val {
+			t.Errorf("field %q = %q, want %q", key, got[key], val)
+		}
+	}
+
+	for _, unwanted := range []string{"c", "kpx"} {
+		if _, ok := got[unwanted]; ok {
+			t.Errorf("expected char/kern metrics to be skipped, but found field %q", unwanted)
+		}
+	}
+}

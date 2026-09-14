@@ -73,6 +73,13 @@ that can't be split into a key and a value, or a field that's given
 twice under two different aliases, is reported as an error with the
 line number.
 
+Real [AFM](https://learn.microsoft.com/en-us/typography/opentype/spec/afm)
+files work too: `fontfmt some.afm` picks the font-level fields (`FamilyName`,
+`Ascender`, `CapHeight`, and so on) out of the header and ignores the
+`Comment` lines, the `StartFontMetrics`/`EndFontMetrics` wrapper, and the
+`StartCharMetrics`/`StartKernData`/`StartComposites` blocks, since those hold
+per-glyph and per-pair data rather than metrics for the font as a whole.
+
 ## Recognized fields
 
 `font-family`, `units-per-em`, `ascent`, `descent`, `line-gap`,
