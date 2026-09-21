@@ -38,7 +38,7 @@ x-height:      519
 ## Usage
 
 ```
-fontfmt [-json] [file ...]
+fontfmt [-json] [-check] [file ...]
 ```
 
 With no arguments, it reads from stdin:
@@ -72,6 +72,12 @@ Lines starting with `#` are treated as comments and skipped. A line
 that can't be split into a key and a value, or a field that's given
 twice under two different aliases, is reported as an error with the
 line number.
+
+Pass `-check` to fail (with a non-zero exit and a message naming the
+fields) if the input contains anything outside the recognized field
+list below. Without it, unrecognized fields are passed through as-is
+instead of being dropped, which is fine for a quick look but not for
+catching a typo or a metric the tool doesn't know about yet.
 
 Real [AFM](https://learn.microsoft.com/en-us/typography/opentype/spec/afm)
 files work too: `fontfmt some.afm` picks the font-level fields (`FamilyName`,

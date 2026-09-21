@@ -207,6 +207,14 @@ func normalizeValue(key, raw string) string {
 	return raw
 }
 
+// IsKnown reports whether key is one of the canonical fields Parse
+// recognizes via alias, as opposed to a name that was passed through
+// verbatim because the input used a spelling with no matching alias.
+func IsKnown(key string) bool {
+	_, ok := fieldRank[key]
+	return ok
+}
+
 // Format renders fields as aligned "key: value" lines, one per field, in
 // canonical order.
 func Format(fields []Field) string {

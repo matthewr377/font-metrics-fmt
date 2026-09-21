@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/matthewr377/fontfmt/metrics"
 )
@@ -32,6 +33,7 @@ type namedFields struct {
 func run(args []string, stdin io.Reader, stdout io.Writer) error {
 	fs := flag.NewFlagSet("fontfmt", flag.ContinueOnError)
 	jsonOut := fs.Bool("json", false, "print fields as JSON instead of aligned text")
+	check := fs.Bool("check", false, "fail if any field isn't a recognized canonical name")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -59,10 +61,35 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 		}
 	}
 
+	if *check {
+		if err := checkKnown(results); err != nil {
+			return err
+		}
+	}
+
 	if *jsonOut {
 		return writeJSON(results, stdout)
 	}
 	return writeText(results, stdout)
+}
+
+// checkKnown reports an error naming every field whose key isn't one of
+// the canonical names metrics.Parse recognizes via alias, so --check
+// catches typos or unfamiliar metrics instead of silently passing them
+// through.
+func checkKnown(results []namedFields) error {
+	for _, r := range results {
+		var unknown []string
+		for _, f := range r.Fields {
+			if !metrics.IsKnown(f.Key) {
+				unknown = append(unknown, f.Key)
+			}
+		}
+		if len(unknown) > 0 {
+			return fmt.Errorf("%s: unknown field(s): %s", r.Label, strings.Join(unknown, ", "))
+		}
+	}
+	return nil
 }
 
 func readFields(label string, r io.Reader) ([]metrics.Field, error) {

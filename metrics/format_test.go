@@ -46,6 +46,15 @@ func TestParseRejectsUnsplittableLine(t *testing.T) {
 	}
 }
 
+func TestIsKnown(t *testing.T) {
+	if !IsKnown("cap-height") {
+		t.Error("cap-height should be a known canonical field")
+	}
+	if IsKnown("italic-angle") {
+		t.Error("italic-angle has no alias and should not be known")
+	}
+}
+
 func TestParseHandlesRealAFMFile(t *testing.T) {
 	input := "StartFontMetrics 4.1\n" +
 		"Comment Generated for testing\n" +

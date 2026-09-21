@@ -50,3 +50,25 @@ func TestRunRejectsUnknownFlag(t *testing.T) {
 		t.Fatal("expected an error for an unknown flag, got nil")
 	}
 }
+
+func TestRunCheckPassesOnKnownFields(t *testing.T) {
+	stdin := strings.NewReader("Family: Arial\nAscender: 905\n")
+	var stdout bytes.Buffer
+
+	if err := run([]string{"-check"}, stdin, &stdout); err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+}
+
+func TestRunCheckFailsOnUnknownField(t *testing.T) {
+	stdin := strings.NewReader("Family: Arial\nItalic Angle: -12\n")
+	var stdout bytes.Buffer
+
+	err := run([]string{"-check"}, stdin, &stdout)
+	if err == nil {
+		t.Fatal("expected an error for an unrecognized field, got nil")
+	}
+	if got := err.Error(); !strings.Contains(got, "italic-angle") {
+		t.Errorf("error = %q, want it to name the unknown field %q", got, "italic-angle")
+	}
+}
