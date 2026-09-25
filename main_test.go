@@ -60,6 +60,58 @@ func TestRunCheckPassesOnKnownFields(t *testing.T) {
 	}
 }
 
+func TestRunTextMultipleInstancesInOneInput(t *testing.T) {
+	stdin := strings.NewReader("Family: Arial\n\nFamily: Georgia\n")
+	var stdout bytes.Buffer
+
+	if err := run(nil, stdin, &stdout); err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+
+	want := "== (stdin)#1 ==\n" +
+		"font-family:  Arial\n" +
+		"\n" +
+		"== (stdin)#2 ==\n" +
+		"font-family:  Georgia\n"
+	if got := stdout.String(); got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
+func TestRunJSONMultipleInstancesInOneInput(t *testing.T) {
+	stdin := strings.NewReader("Family: Arial\n\nFamily: Georgia\n")
+	var stdout bytes.Buffer
+
+	if err := run([]string{"-json"}, stdin, &stdout); err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+
+	want := `[
+  {
+    "file": "(stdin)#1",
+    "fields": [
+      {
+        "key": "font-family",
+        "value": "Arial"
+      }
+    ]
+  },
+  {
+    "file": "(stdin)#2",
+    "fields": [
+      {
+        "key": "font-family",
+        "value": "Georgia"
+      }
+    ]
+  }
+]
+`
+	if got := stdout.String(); got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
 func TestRunCheckFailsOnUnknownField(t *testing.T) {
 	stdin := strings.NewReader("Family: Arial\nItalic Angle: -12\n")
 	var stdout bytes.Buffer

@@ -1,6 +1,9 @@
 package metrics
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseNormalizesKeysAndSeparators(t *testing.T) {
 	input := "Family: Helvetica\n" +
@@ -107,5 +110,75 @@ func TestParseHandlesRealAFMFile(t *testing.T) {
 		if _, ok := got[unwanted]; ok {
 			t.Errorf("expected char/kern metrics to be skipped, but found field %q", unwanted)
 		}
+	}
+}
+
+func TestParseAllSplitsOnBlankLines(t *testing.T) {
+	input := "Family: Arial\nAscender: 905\n\nFamily: Georgia\nAscender: 900\n"
+
+	instances, err := ParseAll(input)
+	if err != nil {
+		t.Fatalf("ParseAll returned error: %v", err)
+	}
+	if len(instances) != 2 {
+		t.Fatalf("got %d instances, want 2", len(instances))
+	}
+
+	want := []string{"Arial", "Georgia"}
+	for i, fields := range instances {
+		got := ""
+		for _, f := range fields {
+			if f.Key == "font-family" {
+				got = f.Value
+			}
+		}
+		if got != want[i] {
+			t.Errorf("instance %d font-family = %q, want %q", i, got, want[i])
+		}
+	}
+}
+
+func TestParseAllSplitsConcatenatedAFMFiles(t *testing.T) {
+	afm := func(family string, ascent string) string {
+		return "StartFontMetrics 4.1\n" +
+			"FamilyName " + family + "\n" +
+			"Ascender " + ascent + "\n" +
+			"EndFontMetrics\n"
+	}
+	input := afm("Helvetica", "718") + afm("Courier", "629")
+
+	instances, err := ParseAll(input)
+	if err != nil {
+		t.Fatalf("ParseAll returned error: %v", err)
+	}
+	if len(instances) != 2 {
+		t.Fatalf("got %d instances, want 2", len(instances))
+	}
+
+	wantFamily := []string{"Helvetica", "Courier"}
+	wantAscent := []string{"718", "629"}
+	for i, fields := range instances {
+		got := make(map[string]string, len(fields))
+		for _, f := range fields {
+			got[f.Key] = f.Value
+		}
+		if got["font-family"] != wantFamily[i] {
+			t.Errorf("instance %d font-family = %q, want %q", i, got["font-family"], wantFamily[i])
+		}
+		if got["ascent"] != wantAscent[i] {
+			t.Errorf("instance %d ascent = %q, want %q", i, got["ascent"], wantAscent[i])
+		}
+	}
+}
+
+func TestParseAllReportsLineNumbersRelativeToWholeInput(t *testing.T) {
+	input := "Family: Arial\n\nthisisnotakeyvaluepair\n"
+
+	_, err := ParseAll(input)
+	if err == nil {
+		t.Fatal("expected an error for a line with no key/value split, got nil")
+	}
+	if got, want := err.Error(), "line 3:"; !strings.HasPrefix(got, want) {
+		t.Errorf("error = %q, want it to start with %q", got, want)
 	}
 }

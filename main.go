@@ -23,8 +23,9 @@ func main() {
 }
 
 // namedFields ties a set of parsed fields back to the input it came
-// from, so multi-file output (text headers, or the "file" key in JSON)
-// can tell them apart.
+// from, so output covering more than one font (multiple files, or
+// multiple instances found within one file) can tell them apart via
+// text headers or the "file" key in JSON.
 type namedFields struct {
 	Label  string          `json:"file"`
 	Fields []metrics.Field `json:"fields"`
@@ -41,23 +42,23 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 
 	var results []namedFields
 	if len(paths) == 0 {
-		fields, err := readFields("(stdin)", stdin)
+		instances, err := readInstances("(stdin)", stdin)
 		if err != nil {
 			return err
 		}
-		results = append(results, namedFields{Label: "(stdin)", Fields: fields})
+		results = append(results, labelInstances("(stdin)", instances)...)
 	} else {
 		for _, path := range paths {
 			f, err := os.Open(path)
 			if err != nil {
 				return err
 			}
-			fields, err := readFields(path, f)
+			instances, err := readInstances(path, f)
 			f.Close()
 			if err != nil {
 				return err
 			}
-			results = append(results, namedFields{Label: path, Fields: fields})
+			results = append(results, labelInstances(path, instances)...)
 		}
 	}
 
@@ -92,17 +93,37 @@ func checkKnown(results []namedFields) error {
 	return nil
 }
 
-func readFields(label string, r io.Reader) ([]metrics.Field, error) {
+// labelInstances turns the font instances parsed out of one input into
+// namedFields entries. The label is only suffixed with "#n" when the
+// input actually held more than one instance, so the common case of one
+// font per file keeps the plain label it always had.
+func labelInstances(label string, instances [][]metrics.Field) []namedFields {
+	if len(instances) <= 1 {
+		var fields []metrics.Field
+		if len(instances) == 1 {
+			fields = instances[0]
+		}
+		return []namedFields{{Label: label, Fields: fields}}
+	}
+
+	named := make([]namedFields, len(instances))
+	for i, fields := range instances {
+		named[i] = namedFields{Label: fmt.Sprintf("%s#%d", label, i+1), Fields: fields}
+	}
+	return named
+}
+
+func readInstances(label string, r io.Reader) ([][]metrics.Field, error) {
 	raw, err := io.ReadAll(r)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", label, err)
 	}
 
-	fields, err := metrics.Parse(string(raw))
+	instances, err := metrics.ParseAll(string(raw))
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", label, err)
 	}
-	return fields, nil
+	return instances, nil
 }
 
 func writeText(results []namedFields, w io.Writer) error {

@@ -88,10 +88,84 @@ type Field struct {
 // be split into a key and a value are returned as an error, named after
 // the 1-based line number so a caller can report where the input broke.
 func Parse(input string) ([]Field, error) {
+	return parseLines(strings.Split(input, "\n"), 0)
+}
+
+// ParseAll splits input into one or more font instances and parses each
+// one separately, so a field that's repeated across instances (every
+// font has a "font-family", say) doesn't trip the duplicate-field check
+// the way it would if the whole input were parsed as a single instance.
+// A blank line, or the start of a new "StartFontMetrics" block, marks
+// the boundary between instances. Segments that parse to no fields at
+// all, such as a stray blank line or a leading comment block, aren't
+// counted as an instance.
+func ParseAll(input string) ([][]Field, error) {
+	var instances [][]Field
+	for _, seg := range splitInstances(input) {
+		fields, err := parseLines(seg.lines, seg.offset)
+		if err != nil {
+			return nil, err
+		}
+		if len(fields) > 0 {
+			instances = append(instances, fields)
+		}
+	}
+	return instances, nil
+}
+
+// segment is a contiguous run of lines from the input believed to belong
+// to a single font instance, along with the 0-based index it starts at
+// in the original input, so parseLines can still report accurate line
+// numbers in errors after the input has been split up.
+type segment struct {
+	lines  []string
+	offset int
+}
+
+// splitInstances breaks input into segments on blank lines and on lines
+// starting a new "StartFontMetrics" block, since both mark a boundary
+// between one font's fields and the next: plain key/value input uses a
+// blank line to separate instances, while several AFM files concatenated
+// together each open with their own StartFontMetrics.
+func splitInstances(input string) []segment {
+	lines := strings.Split(input, "\n")
+
+	var segments []segment
+	var current []string
+	start := -1
+	flush := func() {
+		if len(current) > 0 {
+			segments = append(segments, segment{lines: current, offset: start})
+			current = nil
+			start = -1
+		}
+	}
+
+	for i, raw := range lines {
+		if strings.TrimSpace(raw) == "" {
+			flush()
+			continue
+		}
+		if strings.EqualFold(firstToken(raw), "startfontmetrics") {
+			flush()
+		}
+		if start == -1 {
+			start = i
+		}
+		current = append(current, raw)
+	}
+	flush()
+
+	return segments
+}
+
+// parseLines does the actual work behind Parse, taking a line-number
+// offset so callers that have split a larger input into pieces (see
+// ParseAll) can still report line numbers relative to the original text.
+func parseLines(lines []string, lineOffset int) ([]Field, error) {
 	var fields []Field
 	seen := make(map[string]bool)
 
-	lines := strings.Split(input, "\n")
 	for i := 0; i < len(lines); i++ {
 		line := strings.TrimSpace(lines[i])
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -113,12 +187,12 @@ func Parse(input string) ([]Field, error) {
 
 		key, value, ok := splitKeyValue(line)
 		if !ok {
-			return nil, fmt.Errorf("line %d: can't find a key/value split in %q", i+1, lines[i])
+			return nil, fmt.Errorf("line %d: can't find a key/value split in %q", i+1+lineOffset, lines[i])
 		}
 
 		canonical := normalizeKey(key)
 		if seen[canonical] {
-			return nil, fmt.Errorf("line %d: %q duplicates an earlier field", i+1, canonical)
+			return nil, fmt.Errorf("line %d: %q duplicates an earlier field", i+1+lineOffset, canonical)
 		}
 		seen[canonical] = true
 

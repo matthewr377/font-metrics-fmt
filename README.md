@@ -50,6 +50,12 @@ $ cat arial.metrics | fontfmt
 With more than one file, each block is printed under a `== path ==`
 header so you can tell them apart.
 
+A single file or stdin stream can also hold more than one font: a blank
+line separates one plain key/value block from the next, and several AFM
+files can just be concatenated, since each opens with its own
+`StartFontMetrics`. When an input holds more than one instance, its
+blocks are numbered `== path#1 ==`, `== path#2 ==`, and so on.
+
 Pass `-json` to get the same fields as JSON instead of aligned text.
 For a single input that's a flat array of `{"key", "value"}` objects,
 in the same canonical order as the text output:
@@ -65,8 +71,9 @@ $ fontfmt -json arial.metrics
 ]
 ```
 
-With more than one file, the output is an array of `{"file",
-"fields"}` objects instead, one per input, so files stay distinguishable.
+With more than one file, or more than one instance found in a single
+input, the output is an array of `{"file", "fields"}` objects instead,
+one per font, so they stay distinguishable.
 
 Lines starting with `#` are treated as comments and skipped. A line
 that can't be split into a key and a value, or a field that's given
