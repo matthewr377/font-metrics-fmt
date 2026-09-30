@@ -1,0 +1,26 @@
+[
+  {
+    "key": "font-family",
+    "value": "Arial"
+  },
+  {
+    "key": "units-per-em",
+    "value": "1000"
+  },
+  {
+    "key": "ascent",
+    "value": "905"
+  },
+  {
+    "key": "descent",
+    "value": "-212"
+  },
+  {
+    "key": "cap-height",
+    "value": "716"
+  },
+  {
+    "key": "x-height",
+    "value": "519"
+  }
+]
